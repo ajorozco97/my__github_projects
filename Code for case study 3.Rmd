@@ -1,0 +1,345 @@
+---
+title: "Case Study 3"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+```{r}
+#read in file
+library(readr)
+dow_jones_index <- read_csv("//client/C$/Users/Anthony Orozco/Downloads/Data applications/dow_jones_index.data")
+View(dow_jones_index)
+```
+
+```{r}
+library(sqldf)
+train <- sqldf("select * from dow_jones_index where Quarter < 2")
+View(train)
+test <- sqldf("select * from dow_jones_index where Quarter > 1")
+View(test)
+```
+
+
+```{r}
+#linear model
+#6 of the 8 character variables need to be computed to numeric for regression analysis
+train= na.omit(train)
+test = na.omit(test)
+train$open <- as.numeric(sub("\\$","", train$open))
+train$close <- as.numeric(sub("\\$","", train$close))
+train$high <- as.numeric(sub("\\$","", train$high))
+train$low <- as.numeric(sub("\\$","", train$low))
+train$next_weeks_open <- as.numeric(sub("\\$","", train$next_weeks_open))
+train$next_weeks_close <- as.numeric(sub("\\$","", train$next_weeks_close))
+#test
+test$open <- as.numeric(sub("\\$","", test$open))
+test$close <- as.numeric(sub("\\$","", test$close))
+test$high <- as.numeric(sub("\\$","", test$high))
+test$low <- as.numeric(sub("\\$","", test$low))
+test$next_weeks_open <- as.numeric(sub("\\$","", test$next_weeks_open))
+test$next_weeks_close <- as.numeric(sub("\\$","", test$next_weeks_close))
+str(train)
+str(test)
+```
+
+```{r}
+library(MASS)
+# fit the full model
+full.model <-lm(percent_change_next_weeks_price~., data = train)
+#here we run stepwise regression to select the best model for predicting percent_change_next_weeks_price
+step.model <- stepAIC(full.model, direction =c("both"))
+
+##the lowest AIC for the model is defined here as the best model 
+best.model <- lm(percent_change_next_weeks_price ~ low + previous_weeks_volume + 
+    next_weeks_open + next_weeks_close + percent_return_next_dividend, data = train)
+summary(best.model)
+##second best model
+model2 <- lm(percent_change_next_weeks_price ~ high + low + previous_weeks_volume + 
+    next_weeks_open + next_weeks_close + percent_return_next_dividend, data = train)
+summary(model2)
+
+#third best model
+model3 <- lm(percent_change_next_weeks_price ~ high + low + percent_change_volume_over_last_wk +  previous_weeks_volume + next_weeks_open + next_weeks_close + percent_return_next_dividend, data = train)
+summary(model3)
+```
+
+```{r}
+library(tidyverse)
+```
+
+
+```{r}
+library(caret)
+```
+
+
+```{r}
+#linear prediction for accuracy-best model
+pred1 <- predict(best.model, test)
+mean((pred1 - test$percent_change_next_weeks_price)^2)
+RMSE(pred1, test$percent_change_next_weeks_price)
+summary(best.model)
+# the mean squared error is 2.514 and the RMSE is 1.585
+#model2
+pred2 <- predict(model2, test)
+mean((pred2 - test$percent_change_next_weeks_price)^2)
+RMSE(pred2, test$percent_change_next_weeks_price)
+summary(model2)
+#the mean squared error is 2.19 and RMSE of 1.587
+#model3
+pred3 <- predict(model3, test)
+mean((pred3 - test$percent_change_next_weeks_price)^2)
+RMSE(pred3, test$percent_change_next_weeks_price)
+summary(model3)
+#the mean squared error is 2.52
+##RMSE of 1.589
+#the model labelled best.model is the most accurate in predicting percent change next weeks price
+```
+
+
+```{r}
+#decision trees
+library(tree)
+library(MASS)
+library(rpart)
+set.seed(1)
+##best model
+tree.train = tree(percent_change_next_weeks_price ~ low + previous_weeks_volume +  next_weeks_open + next_weeks_close + percent_return_next_dividend, train)
+summary(tree.train)
+#plot the tree
+plot(tree.train)
+#text(tree.train, pretty = 0)
+#perfrom cost complxity pruning by CV
+cv.train = cv.tree(tree.train)
+cv.train
+which.min(cv.train$size)
+#tree size of 10 has the best tree 
+#plot the estimated test error rate
+plot(cv.train$size,cv.train$dev, type = 'b')
+#use unpruned tree to take predictions on the test set
+yhat = predict(tree.train, newdata = test)
+plot(yhat, test$percent_change_next_weeks_price)
+##model 2
+tree.train2 = tree(percent_change_next_weeks_price ~ high + low + previous_weeks_volume + 
+    next_weeks_open + next_weeks_close + percent_return_next_dividend, data = train)
+summary(tree.train2)
+#plot the tree
+plot(tree.train2)
+#text(tree.train, pretty = 0)
+#perfrom cost complxity pruning by CV
+cv.train2 = cv.tree(tree.train2)
+cv.train2
+which.min(cv.train2$size)
+#tree size of 10 has the best tree 
+#plot the estimated test error rate
+plot(cv.train2$size,cv.train2$dev, type = 'b')
+#use unpruned tree to take predictions on the test set
+yhat = predict(tree.train2, newdata = test)
+plot(yhat, test$percent_change_next_weeks_price)
+##model 3
+tree.train3 = tree(percent_change_next_weeks_price ~ high + low + percent_change_volume_over_last_wk +  previous_weeks_volume + next_weeks_open + next_weeks_close + percent_return_next_dividend, data = train)
+summary(tree.train3)
+#plot the tree
+plot(tree.train3)
+#text(tree.train, pretty = 0)
+#perfrom cost complxity pruning by CV
+cv.train3 = cv.tree(tree.train3)
+cv.train3
+which.min(cv.train3$size)
+#tree size of 10 has the best tree 
+#plot the estimated test error rate
+plot(cv.train3$size,cv.train3$dev, type = 'b')
+#use unpruned tree to take predictions on the test set
+yhat = predict(tree.train3, newdata = test)
+plot(yhat, test$percent_change_next_weeks_price)
+```
+
+
+```{r}
+#find the RMSE of best model
+predictdt1 <- tree.train %>% predict(test)
+head(predictdt1)
+RMSE(predictdt1, test$percent_change_next_weeks_price)
+#the linear model has a better RMSE than the Decision tree model with RSME of 2.88
+#find the RMSE of best model
+predictdt2 <- tree.train2 %>% predict(test)
+head(predictdt2)
+RMSE(predictdt2, test$percent_change_next_weeks_price)
+#the linear model has a better RMSE than the Decision tree model with RSME of 2.84 which is better than best model
+predictdt3 <- tree.train3 %>% predict(test)
+head(predictdt3)
+RMSE(predictdt3, test$percent_change_next_weeks_price)
+#the linear model has a better RMSE than the Decision tree model with RSME of 3.05 which is the worst out of any model when predicting percent change next weeks price
+
+```
+
+
+```{r}
+##support vecot regression
+library(e1071)
+#best model
+svm1 = svm(percent_change_next_weeks_price ~ low + previous_weeks_volume +  next_weeks_open + next_weeks_close + percent_return_next_dividend, train, kernal = 'radical', gamma = .1, cost = 10 )
+summary(svm1)
+
+predsictedY <- predict(svm1, test)
+#find RMSE
+RMSE(predsictedY, test$percent_change_next_weeks_price)
+#the RMSE is better than Decision tree at predicting but worse than linear model with a score of 2.21
+##model 2
+svm2 = svm(percent_change_next_weeks_price ~ high + low + previous_weeks_volume + 
+    next_weeks_open + next_weeks_close + percent_return_next_dividend, data = train, kernal = 'radical', gamma = .1, cost = 10 )
+summary(svm2)
+
+predsictedY2 <- predict(svm2, test)
+#find RMSE
+RMSE(predsictedY2, test$percent_change_next_weeks_price)
+#rmse of 2.25
+##model3
+```
+
+
+```{r}
+svm3 = svm(percent_change_next_weeks_price ~ high + low + percent_change_volume_over_last_wk +  previous_weeks_volume + next_weeks_open + next_weeks_close + percent_return_next_dividend, data = train, kernal = 'radical', gamma = .1, cost = 10 )
+summary(svm3)
+
+predsictedY3 <- predict(svm1, test)
+#find RMSE
+RMSE(predsictedY3, test$percent_change_next_weeks_price)
+#rmse of 2.21
+```
+
+```{r}
+## now that we have predicted stock prices using a lm, decision tree, and svr, lets use CAPM to evaluate the risk premiums of the 4 stocks of Alcoa, Walt Disney, Walmart, and Microsoft
+
+#first we need to seperate each stock into its own assignment
+CAPM_AA_MSFT<-sqldf("select
+      a.date
+      , a.percent_change_price as percent_change_price_all_
+      , b.percent_change_price as percent_change_price_compAA,
+      c.percent_change_price as percent_change_price_compMSFT
+      from
+      (select date
+      , (sum(close) - sum(open))/sum(open) * 100 as percent_change_price
+      from train
+      where stock <> 'AA'
+      group by
+      date) a
+      inner join
+      (select date
+      , percent_change_price
+      from train
+      where stock = 'AA') b
+      on a.date = b.date,
+      (select date
+      , (sum(close) - sum(open))/sum(open) * 100 as percent_change_price
+      from train
+      where stock <> 'MSFT'
+      group by
+      date) 
+      inner join
+      (select date
+      , percent_change_price
+      from train
+      where stock = 'MSFT') c
+      on a.date = c.date
+      ")
+
+CAPM_DIS_WMT<-sqldf("select
+      a.date
+      , a.percent_change_price as percent_change_price_all
+      , b.percent_change_price as percent_change_price_compDIS,
+      c.percent_change_price as percent_change_price_compWMT
+      from
+      (select date
+      , (sum(close) - sum(open))/sum(open) * 100 as percent_change_price
+      from train
+      where stock <> 'DIS'
+      group by
+      date) a
+      inner join
+      (select date
+      , percent_change_price
+      from train
+      where stock = 'DIS') b
+      on a.date = b.date
+      ,
+      (select date
+      , (sum(close) - sum(open))/sum(open) * 100 as percent_change_price
+      from train
+      where stock <> 'WMT'
+      group by
+      date) 
+      inner join
+      (select date
+      , percent_change_price
+      from train
+      where stock = 'WMT') c
+      on a.date = c.date
+      ")
+CAPM_VZ_T<-sqldf("select
+      a.date
+      , a.percent_change_price as percent_change_price_all
+      , b.percent_change_price as percent_change_price_compVZ,
+      c.percent_change_price as percent_change_price_compT
+      from
+      (select date
+      , (sum(close) - sum(open))/sum(open) * 100 as percent_change_price
+      from train
+      where stock <> 'VZ'
+      group by
+      date) a
+      inner join
+      (select date
+      , percent_change_price
+      from train
+      where stock = 'VZ') b
+      on a.date = b.date
+      ,
+      (select date
+      , (sum(close) - sum(open))/sum(open) * 100 as percent_change_price
+      from train
+      where stock <> 'T'
+      group by
+      date) 
+      inner join
+      (select date
+      , percent_change_price
+      from train
+      where stock = 'T') c
+      on a.date = c.date
+      ")
+```
+
+```{r}
+library(lm.beta)
+#predicting risk of Microsoft with alcoa
+df_lm <- lm(percent_change_price_compAA ~ percent_change_price_compMSFT, data = CAPM_AA_MSFT)
+summary(df_lm)
+AA_MSFT2<-lm.beta(df_lm)
+print(AA_MSFT)
+summary(AA_MSFT)
+coef(AA_MSFT)
+##predicting risk of disney with Walmart
+library(lm.beta)
+df_lm2 <- lm(percent_change_price_compDIS ~ percent_change_price_compWMT, data = CAPM_DIS_WMT)
+summary(df_lm2)
+DIS_WMT<-lm.beta(df_lm2)
+print(DIS_WMT)
+summary(DIS_WMT)
+coef(DIS_WMT)
+##predict risk of at&t with Verizon
+df_lm3 <- lm(percent_change_price_compT ~ percent_change_price_compVZ, data = CAPM_VZ_T)
+summary(df_lm3)
+VZ_T<-lm.beta(df_lm3)
+print(VZ_T)
+summary(VZ_T)
+coef(VZ_T) 
+```
+
+
+
+
+
+
