@@ -1,0 +1,216 @@
+---
+title: "NBA Average Player Salary"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+
+
+```{r cars}
+#read file
+library(readr)
+ Proposal_Data_set <- read_csv("//client/C$/Users/Anthony Orozco/Downloads/Data applications/Proposal Data set.csv")
+str(Proposal_Data_set)
+```
+
+```{r}
+##correlations,assumptions test, exploratory analyis
+prop <- Proposal_Data_set[, c(3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27)]
+str(prop)
+#mean & SD of Average Salary
+mean(prop$`Average Salary`)
+sd(prop$`Average Salary`)
+##correlation plot
+source("http://www.sthda.com/upload/rquery_cormat.r")
+require("corrplot")
+rquery.cormat(prop)
+##boxplot & scatterplot  with top 4 correlations from corrplot(Seasons,GS,GP & Age)
+##seasons
+boxplot(`Average Salary` ~ Seasons, data = prop, col = "red")
+with(prop, plot( Seasons, `Average Salary`))
+##GS
+with(prop, plot( GS, `Average Salary`))
+##GP
+with(prop, plot( GP, `Average Salary`))
+##AGE
+boxplot(`Average Salary` ~ AGE, data = prop, col = "red")
+with(prop, plot( AGE, `Average Salary`))
+##Cluster dendrogram
+library(tidyverse)
+library(cluster)
+library(factoextra)
+library(dendextend)
+##plot
+df=scale(prop$`Average Salary`)
+head(prop)
+d = dist(df, method = "euclidean")
+hc1 = hclust(d, method = "complete")
+plot(hc1)
+##group
+sub_grp = cutree(hc1, k=4)
+table(sub_grp)
+plot(sub_grp)
+##seperate borders
+plot(hc1, cex =.6)
+rect.hclust(hc1, k=4, border = 2:4)
+
+```
+```{r}
+##Multiple Linear Regression w/Visuals
+library(MASS)
+##Stepwise no interaction to find lowest AIC
+full.model <- lm(`Average Salary` ~ ., data =prop)
+step.model <- stepAIC(full.model, direction =c("both"))
+##Step:  AIC=3147.92
+best.model<- lm(`Average Salary` ~ Seasons + `3PM` + `3PA` + FTM + DREB + AST + 
+    TOV + `Contract term`, data = prop)
+summary(best.model)
+#Visual
+plot(best.model)
+abline(best.model)
+##second best model Step:  AIC=3148.48
+second.model<- lm(`Average Salary` ~ Seasons + `3PM` + `3PA` + FTM + DREB + AST + 
+    TOV + PF + `Contract term`, data = prop)
+##Visual
+plot(second.model)
+abline(second.model)
+summary(second.model)
+##3rd best modelStep:  AIC=3149.5
+third.model<- lm(`Average Salary` ~ Seasons + GS + `3PM` + `3PA` + FTM + DREB + 
+    AST + TOV + PF + `Contract term`, data =prop)
+#visual
+plot(third.model)
+abline(third.model)
+summary(third.model)
+```
+
+```{r}
+##with interactions
+fullint.model <- lm(`Average Salary` ~ ., data =prop)
+step(fullint.model, scope = . ~ .^2, direction = 'forward')
+##best model that was not overfitted-Step:  AIC=1315.9
+##included top 26 interactions
+best.interaction<- lm(`Average Salary` ~ AGE + Seasons + GP + GS + MIN + PTS + FGM + 
+    FGA + `FG%` + `3PM` + `3PA` + `3P%` + FTM + FTA + `FT%` + 
+    OREB + DREB + REB + AST + STL + BLK + TOV + PF + `Contract term` + 
+    Seasons:GP + Seasons:STL + STL:BLK + `FG%`:TOV + AGE:TOV + 
+    FTM:`Contract term` + PTS:`Contract term` + Seasons:`3PM` + 
+    AGE:`FG%` + TOV:`Contract term` + AGE:Seasons + AGE:BLK + 
+    `FG%`:`3PA` + `3PA`:PF + OREB:STL + GS:STL + FGA:`3P%` + 
+    GS:`FG%` + Seasons:BLK + AST:`Contract term` + AGE:GS + GP:BLK + 
+    FTM:BLK + Seasons:`FG%` + `3PA`:`3P%` + `3PM`:`3P%` + AGE:`3P%`, data =prop)
+#visual
+plot(best.interaction)
+abline(best.interaction)
+summary(best.interaction)
+```
+
+```{r}
+library(rcompanion)
+##predict accuracy
+model = accuracy(list(best.model,second.model,third.model,best.interaction),
+          plotit=TRUE, digits=3)
+print(model)
+##it is clear the model labelled best.interaction is the best model in terms of significance/R-squared and prediction accuracy of the 4 models
+```
+
+```{r}
+##support vector regression
+library(e1071)
+svm1 = svm(`Average Salary` ~ Seasons + `3PM` + `3PA` + FTM + DREB + AST + 
+    TOV + `Contract term`, prop,kernal = 'radical', gamma = .1, cost = 10 )
+summary(svm1)
+##second model
+svm2 = svm(`Average Salary` ~ Seasons + `3PM` + `3PA` + FTM + DREB + AST + 
+    TOV + PF + `Contract term`,  prop,kernal = 'radical', gamma = .1, cost = 10)
+##third model
+svm3 = svm(`Average Salary` ~ Seasons + GS + `3PM` + `3PA` + FTM + DREB + 
+    AST + TOV + PF + `Contract term`, prop,kernal = 'radical', gamma = .1, cost = 10)
+#svm4
+svm4 = svm(`Average Salary` ~ AGE + Seasons + GP + GS + MIN + PTS + FGM + 
+    FGA + `FG%` + `3PM` + `3PA` + `3P%` + FTM + FTA + `FT%` + 
+    OREB + DREB + REB + AST + STL + BLK + TOV + PF + `Contract term` + 
+    Seasons:GP + Seasons:STL + STL:BLK + `FG%`:TOV + AGE:TOV + 
+    FTM:`Contract term` + PTS:`Contract term` + Seasons:`3PM` + 
+    AGE:`FG%` + TOV:`Contract term` + AGE:Seasons + AGE:BLK + 
+    `FG%`:`3PA` + `3PA`:PF + OREB:STL + GS:STL + FGA:`3P%` + 
+    GS:`FG%` + Seasons:BLK + AST:`Contract term` + AGE:GS + GP:BLK + 
+    FTM:BLK + Seasons:`FG%` + `3PA`:`3P%` + `3PM`:`3P%` + AGE:`3P%`, prop ,kernal = 'radical', gamma = .1, cost = 10)
+##predict accuracy
+library(tidyverse)
+library(caret)
+#svm1
+predictedY1 <- predict(svm1, prop)
+RMSE(predictedY1, prop$`Average Salary`)
+#svm2
+predictedY2 <- predict(svm2, prop)
+RMSE(predictedY2, prop$`Average Salary`)
+#svm3
+predictedY3 <- predict(svm3, prop)
+RMSE(predictedY3, prop$`Average Salary`)
+#svm4
+predictedY4 <- predict(svm4, prop)
+RMSE(predictedY4, prop$`Average Salary`)
+``` 
+
+
+```{r}
+##create a separation of the data based off the mean of average salary
+library(sqldf)
+prop2 = sqldf( 'Select * from Proposal_Data_set
+where `Average Salary` > 17859077 
+order by `Average Salary` DESC')
+prop3 = sqldf( 'Select * from Proposal_Data_set
+where `Average Salary` < 17859077 
+order by `Average Salary` DESC')
+```
+
+```{r}
+##I will compare the means of the most predictive variables: Seasons + GS + `3PM` + `3PA` + FTM + DREB +  AST + TOV + PF + `Contract term in the svm3 since the interaction models utilized all of the variables.
+##the purpose will be to identify the differences and what separates the two PayTiers
+mean(prop2$AGE)
+mean(prop3$AGE)
+mean(prop2$Seasons)
+mean(prop3$Seasons)
+mean(prop2$GS)
+mean(prop3$GS)
+mean(prop2$`3PM`)
+mean(prop3$`3PM`)
+mean(prop2$`3PA`)
+mean(prop3$`3PA`)
+mean(prop2$FTM)
+mean(prop3$FTM)
+mean(prop2$DREB)
+mean(prop3$DREB)
+mean(prop2$AST)
+mean(prop3$AST)
+mean(prop2$TOV)
+mean(prop3$TOV)
+mean(prop2$PF)
+mean(prop3$PF)
+mean(prop2$`Contract term`)
+mean(prop3$`Contract term`) 
+##Look at the separation between two clear tiers of players 48 obs. in prop2 and 52 obs. in prop3
+prop2 <- prop2[, c(3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27)]
+prop3 <- prop3[, c(3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27)]
+library(MASS)
+##Stepwise for top tier
+full.model2 <- lm(`Average Salary` ~ ., data =prop2)
+step.model2 <- stepAIC(full.model, direction =c("both"))
+#best model
+best.tier = lm(`Average Salary` ~ AGE + GP + FTM + `FT%` + AST + STL + `Contract term`, data =prop2)
+summary(best.tier)
+##prop3 lower tier
+full.model3 <- lm(`Average Salary` ~ ., data =prop3)
+step.model3 <- stepAIC(full.model, direction =c("both"))
+lower.tier = lm(`Average Salary` ~ AGE + GP + FTM + `FT%` + AST + STL + `Contract term`, data = prop3)
+summary(lower.tier)
